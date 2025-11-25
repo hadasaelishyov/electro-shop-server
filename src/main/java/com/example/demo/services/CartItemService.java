@@ -45,6 +45,10 @@ public class CartItemService {
         return cartItemRepo.findById(id);
     }
 
+    public boolean existsByCartIdAndProductId(Long cartId, Long productId) {
+        return cartItemRepo.existsByCartIdAndProductId(cartId, productId);
+    }
+
     /**
      * Get cart items by cart ID
      */

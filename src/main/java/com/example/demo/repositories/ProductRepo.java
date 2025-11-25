@@ -15,13 +15,10 @@ public interface ProductRepo extends JpaRepository<Product, Long> {
 
     List<Product> findByCategoryId(Long categoryId);
 
-    // תמיכה בחיפוש עם דפדוף
-    Page<Product> findByCategoryId(Long categoryId, Pageable pageable);
 
-    List<Product> findByNameContainingIgnoreCase(String name);
+    Product findByNameContainingIgnoreCase(String name);
 
     // תמיכה בחיפוש עם דפדוף
-    Page<Product> findByNameContainingIgnoreCase(String name, Pageable pageable);
 
     List<Product> findByBrand(String brand);
 
@@ -32,8 +29,6 @@ public interface ProductRepo extends JpaRepository<Product, Long> {
 
     List<Product> findByPriceBetween(double minPrice, double maxPrice);
 
-    // תמיכה בחיפוש טווח מחירים עם דפדוף
-    Page<Product> findByPriceBetween(double minPrice, double maxPrice, Pageable pageable);
 
     List<Product> findByQuantityLessThan(int quantity);
 
@@ -59,13 +54,12 @@ public interface ProductRepo extends JpaRepository<Product, Long> {
             "(:minPrice IS NULL OR p.price >= :minPrice) AND " +
             "(:maxPrice IS NULL OR p.price <= :maxPrice) AND " +
             "p.active = true")
-    Page<Product> findProductsByFilters(
+    List<Product> findProductsByFilters(
             @Param("name") String name,
             @Param("categoryId") Long categoryId,
             @Param("brand") String brand,
             @Param("minPrice") Double minPrice,
-            @Param("maxPrice") Double maxPrice,
-            Pageable pageable
+            @Param("maxPrice") Double maxPrice
     );
 
     // מציאת מוצרים פופולריים (לפי הכמות בהזמנות)

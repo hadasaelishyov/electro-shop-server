@@ -102,7 +102,7 @@ public class CartService {
      * Add a product to cart with quantity validation
      */
     @Transactional
-    public CartItem addProductToCart(Long cartId, Long productId, int quantity) {
+    public Cart addProductToCart(Long cartId, Long productId, int quantity) {
         if (quantity <= 0) {
             throw new IllegalArgumentException("Quantity must be greater than zero");
         }
@@ -129,21 +129,36 @@ public class CartService {
                             ", Requested: " + quantity);
         }
 
-        // Add product to cart
-        CartItem cartItem = cart.addProduct(product, quantity);
+        // Check if product already exists in cart
+        Optional<CartItem> existingItem = cart.getCartItems().stream()
+                .filter(item -> item.getProduct().getId().equals(productId))
+                .findFirst();
 
-        // Update cart
+        CartItem cartItem;
+        if (existingItem.isPresent()) {
+            // Update existing item
+            cartItem = existingItem.get();
+            cartItem.setQuantity(cartItem.getQuantity() + quantity);
+            cartItem.setUpdatedAt(LocalDateTime.now());
+        } else {
+            // Create new cart item
+            cartItem = new CartItem(cart, product, quantity);
+            cart.getCartItems().add(cartItem);
+        }
+
+        // Update cart timestamp
         cart.setUpdatedAt(LocalDateTime.now());
+
+        // Save cart (this will cascade save the cart items due to CascadeType.ALL)
         cartRepo.save(cart);
 
-        return cartItemRepo.save(cartItem);
+        return cart;
     }
-
     /**
      * Update product quantity in cart
      */
     @Transactional
-    public CartItem updateCartItemQuantity(Long cartId, Long productId, int newQuantity) {
+    public Cart updateCartItemQuantity(Long cartId, Long productId, int newQuantity) {
         if (newQuantity <= 0) {
             removeProductFromCart(cartId, productId);
         }
@@ -178,9 +193,9 @@ public class CartService {
 
         // Update cart
         cart.setUpdatedAt(LocalDateTime.now());
-        cartRepo.save(cart);
+        cartItemRepo.save(cartItem);
+        return cartRepo.save(cart);
 
-        return cartItemRepo.save(cartItem);
     }
 
     /**

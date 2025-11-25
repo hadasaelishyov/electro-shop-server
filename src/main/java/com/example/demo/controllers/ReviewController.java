@@ -32,17 +32,14 @@ public class ReviewController {
 
     // Get all reviews with pagination (admin)
     @GetMapping("/paginated")
-    public ResponseEntity<Page<Review>> getAllPaginated(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+    public ResponseEntity<List<Review>> getAllPaginated(
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "DESC") String sortDirection) {
 
         Sort sort = sortDirection.equalsIgnoreCase("ASC") ?
                 Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
-        Pageable pageable = PageRequest.of(page, size, sort);
 
-        return ResponseEntity.ok(reviewService.getAllPaginated(pageable));
+        return ResponseEntity.ok(reviewService.getAllPaginated());
     }
 
     // Get review by ID
@@ -61,18 +58,15 @@ public class ReviewController {
 
     // Get reviews by product ID with pagination
     @GetMapping("/product/{productId}/paginated")
-    public ResponseEntity<Page<Review>> getByProductIdPaginated(
+    public ResponseEntity<List<Review>> getByProductIdPaginated(
             @PathVariable Long productId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "DESC") String sortDirection) {
 
         Sort sort = sortDirection.equalsIgnoreCase("ASC") ?
                 Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
-        Pageable pageable = PageRequest.of(page, size, sort);
 
-        return ResponseEntity.ok(reviewService.getByProductId(productId, pageable));
+        return ResponseEntity.ok(reviewService.getByProductId(productId));
     }
 
     // Get approved reviews by product ID
@@ -90,9 +84,7 @@ public class ReviewController {
     // Get reviews by user ID with pagination
     @GetMapping("/user/{userId}/paginated")
     public ResponseEntity<List<Review>> getByUserIdPaginated(
-            @PathVariable Long userId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @PathVariable Long userId) {
 
         return ResponseEntity.ok(reviewService.getByUserId(userId));
     }

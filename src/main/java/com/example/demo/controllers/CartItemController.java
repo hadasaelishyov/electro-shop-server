@@ -29,6 +29,13 @@ public class CartItemController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+    @GetMapping("/exists/{cartId}/{productId}")
+    public ResponseEntity<Boolean> existsByCartIdAndProductId(
+            @PathVariable Long cartId,
+            @PathVariable Long productId) {
+        boolean exists = cartItemService.existsByCartIdAndProductId(cartId, productId);
+        return ResponseEntity.ok(exists);
+    }
 
     @GetMapping("/cart/{cartId}")
     public ResponseEntity<List<CartItem>> getByCartId(@PathVariable Long cartId) {

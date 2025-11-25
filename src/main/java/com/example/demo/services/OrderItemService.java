@@ -87,10 +87,6 @@ public class OrderItemService {
         Order order = orderRepo.findById(item.getOrder().getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + item.getOrder().getId()));
 
-        // Only allow adding items to orders in PENDING state
-        if (order.getStatusOrder() != com.example.demo.entities.StatusOrder.PENDING) {
-            throw new InvalidOrderStateException("Cannot add items to orders not in PENDING state");
-        }
 
         // Check if product exists
         Product product = productRepo.findById(item.getProduct().getId())
@@ -120,10 +116,6 @@ public class OrderItemService {
 
         Order order = existingItem.getOrder();
 
-        // Only allow updating items for orders in PENDING state
-        if (order.getStatusOrder() != com.example.demo.entities.StatusOrder.PENDING) {
-            throw new InvalidOrderStateException("Cannot modify items for orders not in PENDING state");
-        }
 
         // Validate quantity
         if (updatedItem.getQuantity() <= 0) {
@@ -160,10 +152,7 @@ public class OrderItemService {
 
         Order order = existingItem.getOrder();
 
-        // Only allow updating items for orders in PENDING state
-        if (order.getStatusOrder() != com.example.demo.entities.StatusOrder.PENDING) {
-            throw new InvalidOrderStateException("Cannot modify items for orders not in PENDING state");
-        }
+
 
         // Update quantity
         existingItem.setQuantity(newQuantity);
@@ -186,10 +175,7 @@ public class OrderItemService {
 
         Order order = item.getOrder();
 
-        // Only allow deleting items for orders in PENDING state
-        if (order.getStatusOrder() != com.example.demo.entities.StatusOrder.PENDING) {
-            throw new InvalidOrderStateException("Cannot delete items from orders not in PENDING state");
-        }
+
 
         orderItemRepo.deleteById(id);
 

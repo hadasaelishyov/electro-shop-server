@@ -1,6 +1,5 @@
 package com.example.demo.controllers;
 
-import com.example.demo.entities.StatusOrder;
 import com.example.demo.services.OrderService;
 import com.example.demo.services.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/admin")
 @CrossOrigin(origins = "http://localhost:5173")
+
 public class AdminController {
 
     @Autowired
@@ -28,8 +28,7 @@ public class AdminController {
         try {
             Map<String, Object> stats = new HashMap<>();
             stats.put("totalOrders", orderService.getAll().size());
-            stats.put("pendingOrders", orderService.getByStatus(StatusOrder.PENDING).size());
-            stats.put("deliveredOrders", orderService.getByStatus(StatusOrder.DELIVERED).size());
+
             stats.put("totalProducts", productService.getAll().size());
 
             return ResponseEntity.ok(stats);

@@ -1,5 +1,9 @@
 package com.example.demo.services;
 
+import com.example.demo.dto.OrderMapper;
+import com.example.demo.dto.ProductDto;
+import com.example.demo.dto.ProductImageDto;
+import com.example.demo.dto.ProductSpecificationDto;
 import com.example.demo.entities.Category;
 import com.example.demo.entities.Product;
 import com.example.demo.entities.ProductImage;
@@ -29,63 +33,67 @@ public class ProductService {
 
     @Autowired
     private CategoryRepo categoryRepo;
+    @Autowired
+    private OrderMapper orderMapper;
 
-    // Directory for storing product images
-    private final String UPLOAD_DIR = "./uploads/products/";
 
     public ProductService() {
-        // Create upload directory if it doesn't exist
-        Path uploadPath = Paths.get(UPLOAD_DIR);
-        if (!Files.exists(uploadPath)) {
-            try {
-                Files.createDirectories(uploadPath);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
     }
 
     /**
      * Get all products (with optional pagination)
      */
-    public List<Product> getAll() {
-        return productRepo.findAll();
+    public List<ProductDto> getAll() {
+        return productRepo.findAll()
+                .stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     /**
      * Get all active products (with pagination)
      */
-    public Page<Product> getAllActive(Pageable pageable) {
-        return productRepo.findProductsByFilters(null, null, null, null, null, pageable);
+    public List<ProductDto> getAllActive() {
+        return productRepo.findProductsByFilters(null, null, null, null, null)
+                .stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     /**
      * Get product by ID
      */
-    public Optional<Product> getById(Long id) {
-        return productRepo.findById(id);
+    public Optional<ProductDto> getById(Long id) {
+        return productRepo.findById(id)
+                .map(orderMapper::toDto);
     }
 
     /**
      * Get products by category ID (with pagination)
      */
-    public Page<Product> getByCategoryId(Long categoryId, Pageable pageable) {
-        return productRepo.findByCategoryId(categoryId, pageable);
+    public List<ProductDto> getByCategoryId(Long categoryId) {
+        return productRepo.findByCategoryId(categoryId)
+                .stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     /**
      * Search products by name (with pagination)
      */
-    public Page<Product> searchByName(String name, Pageable pageable) {
-        return productRepo.findByNameContainingIgnoreCase(name, pageable);
+    public Product searchByName(String name) {
+        return productRepo.findByNameContainingIgnoreCase(name);
     }
 
     /**
      * Advanced product search with filters
      */
-    public Page<Product> searchProducts(String name, Long categoryId, String brand,
-                                        Double minPrice, Double maxPrice, Pageable pageable) {
-        return productRepo.findProductsByFilters(name, categoryId, brand, minPrice, maxPrice, pageable);
+    public List<ProductDto> searchProducts(String name, Long categoryId, String brand,
+                                        Double minPrice, Double maxPrice) {
+        return productRepo.findProductsByFilters(name, categoryId, brand, minPrice, maxPrice)
+                .stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -106,17 +114,55 @@ public class ProductService {
      * Add a new product
      */
     @Transactional
-    public Product add(Product product) {
-        // Set timestamps
+    public Product createFromDTO(ProductDto productDTO) {
+        // Validate required fields
+        if (productDTO.getName() == null || productDTO.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Product name is required");
+        }
+        if (productDTO.getCategoryId() == null) {
+            throw new IllegalArgumentException("Category ID is required");
+        }
+        if (productDTO.getPrice() <= 0) {
+            throw new IllegalArgumentException("Price must be greater than 0");
+        }
+
+        // Find category
+        Category category = categoryRepo.findById(productDTO.getCategoryId())
+                .orElseThrow(() -> new IllegalArgumentException("Category not found with id: " + productDTO.getCategoryId()));
+
+        // Create new product
+        Product product = new Product();
+        product.setName(productDTO.getName().trim());
+        product.setDescription(productDTO.getDescription() != null ? productDTO.getDescription().trim() : "");
+        product.setPrice(productDTO.getPrice());
+        product.setQuantity(productDTO.getQuantity());
+        product.setBrand(productDTO.getBrand() != null ? productDTO.getBrand().trim() : "");
+        product.setModel(productDTO.getModel() != null ? productDTO.getModel().trim() : "");
+        product.setActive(productDTO.isActive());
+        product.setCategory(category);
         product.setCreatedAt(LocalDateTime.now());
         product.setUpdatedAt(LocalDateTime.now());
-        product.setActive(true);
 
-        // Validate category exists
-        if (product.getCategory() != null && product.getCategory().getId() != null) {
-            Category category = categoryRepo.findById(product.getCategory().getId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
-            product.setCategory(category);
+        // Add images if provided
+        if (productDTO.getImages() != null && !productDTO.getImages().isEmpty()) {
+            for (ProductImageDto imageDTO : productDTO.getImages()) {
+                if (imageDTO.getImageUrl() != null && !imageDTO.getImageUrl().trim().isEmpty()) {
+                    ProductImage image = new ProductImage(product, imageDTO.getImageUrl().trim(), imageDTO.isMain());
+                    product.getImages().add(image);
+                }
+            }
+        }
+
+        // Add specifications if provided
+        if (productDTO.getSpecifications() != null && !productDTO.getSpecifications().isEmpty()) {
+            for (ProductSpecificationDto specDTO : productDTO.getSpecifications()) {
+                if (specDTO.getSpecName() != null && !specDTO.getSpecName().trim().isEmpty() &&
+                        specDTO.getSpecValue() != null && !specDTO.getSpecValue().trim().isEmpty()) {
+                    ProductSpecification spec = new ProductSpecification(product,
+                            specDTO.getSpecName().trim(), specDTO.getSpecValue().trim());
+                    product.getSpecifications().add(spec);
+                }
+            }
         }
 
         return productRepo.save(product);
@@ -126,72 +172,74 @@ public class ProductService {
      * Update an existing product
      */
     @Transactional
-    public Product update(Long id, Product updatedProduct) {
+    public ProductDto updateFromDTO(Long id, ProductDto productDTO) {
         Product existingProduct = productRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
 
+        // Validate required fields
+        if (productDTO.getName() != null && productDTO.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Product name cannot be empty");
+        }
+        if (productDTO.getPrice() <= 0) {
+            throw new IllegalArgumentException("Price must be greater than 0");
+        }
+
         // Update basic fields
-        existingProduct.setName(updatedProduct.getName());
-        existingProduct.setDescription(updatedProduct.getDescription());
-        existingProduct.setPrice(updatedProduct.getPrice());
-        existingProduct.setQuantity(updatedProduct.getQuantity());
-        existingProduct.setBrand(updatedProduct.getBrand());
-        existingProduct.setModel(updatedProduct.getModel());
-        existingProduct.setActive(updatedProduct.isActive());
+        if (productDTO.getName() != null) {
+            existingProduct.setName(productDTO.getName().trim());
+        }
+        if (productDTO.getDescription() != null) {
+            existingProduct.setDescription(productDTO.getDescription().trim());
+        }
+        existingProduct.setPrice(productDTO.getPrice());
+        existingProduct.setQuantity(productDTO.getQuantity());
+        if (productDTO.getBrand() != null) {
+            existingProduct.setBrand(productDTO.getBrand().trim());
+        }
+        if (productDTO.getModel() != null) {
+            existingProduct.setModel(productDTO.getModel().trim());
+        }
+        existingProduct.setActive(productDTO.isActive());
         existingProduct.setUpdatedAt(LocalDateTime.now());
 
         // Update category if provided
-        if (updatedProduct.getCategory() != null && updatedProduct.getCategory().getId() != null) {
-            Category category = categoryRepo.findById(updatedProduct.getCategory().getId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+        if (productDTO.getCategoryId() != null && existingProduct.getCategory()!=null&&!productDTO.getCategoryId().equals(existingProduct.getCategory().getId())) {
+            Category category = categoryRepo.findById(productDTO.getCategoryId())
+                    .orElseThrow(() -> new IllegalArgumentException("Category not found with id: " + productDTO.getCategoryId()));
             existingProduct.setCategory(category);
         }
 
-        return productRepo.save(existingProduct);
-    }
+        // Update images if provided
+        if (productDTO.getImages() != null) {
+            // Clear existing images that are not in the new list
+            existingProduct.getImages().clear();
 
-    /**
-     * Add product image
-     */
-    @Transactional
-    public Product addProductImage(Long productId, MultipartFile imageFile, boolean isMain) throws IOException {
-        Product product = productRepo.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
-
-        // Generate unique filename
-        String filename = UUID.randomUUID() + "_" + imageFile.getOriginalFilename();
-        Path targetPath = Paths.get(UPLOAD_DIR + filename);
-
-        // Save file to disk
-        Files.copy(imageFile.getInputStream(), targetPath);
-
-        // Save image reference to database
-        ProductImage image = new ProductImage(product, "/uploads/products/" + filename, isMain);
-        product.getImages().add(image);
-
-        // If this is the main image and other images exist, update their isMain status
-        if (isMain) {
-            product.getImages().stream()
-                    .filter(img -> img.isMain() && !img.equals(image))
-                    .forEach(img -> img.setMain(false));
+            for (ProductImageDto imageDTO : productDTO.getImages()) {
+                if (imageDTO.getImageUrl() != null && !imageDTO.getImageUrl().trim().isEmpty()) {
+                    ProductImage image = new ProductImage(existingProduct, imageDTO.getImageUrl().trim(), imageDTO.isMain());
+                    existingProduct.getImages().add(image);
+                }
+            }
         }
 
-        return productRepo.save(product);
+        // Update specifications if provided
+        if (productDTO.getSpecifications() != null) {
+            existingProduct.getSpecifications().clear();
+
+            for (ProductSpecificationDto specDTO : productDTO.getSpecifications()) {
+                if (specDTO.getSpecName() != null && !specDTO.getSpecName().trim().isEmpty() &&
+                        specDTO.getSpecValue() != null && !specDTO.getSpecValue().trim().isEmpty()) {
+                    ProductSpecification spec = new ProductSpecification(existingProduct,
+                            specDTO.getSpecName().trim(), specDTO.getSpecValue().trim());
+                    existingProduct.getSpecifications().add(spec);
+                }
+            }
+        }
+
+         productRepo.save(existingProduct);
+        return orderMapper.toDto(existingProduct);
     }
 
-    /**
-     * Add product specification
-     */
-    @Transactional
-    public Product addProductSpecification(Long productId, String specName, String specValue) {
-        Product product = productRepo.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
-
-        ProductSpecification spec = new ProductSpecification(product, specName, specValue);
-        product.getSpecifications().add(spec);
-
-        return productRepo.save(product);
-    }
 
     /**
      * Delete a specification
@@ -204,6 +252,22 @@ public class ProductService {
         product.setSpecifications(
                 product.getSpecifications().stream()
                         .filter(spec -> !spec.getId().equals(specId))
+                        .collect(Collectors.toList())
+        );
+
+        return productRepo.save(product);
+    }
+    /**
+     * Delete an image
+     */
+    @Transactional
+    public Product deleteImage(Long productId, String imageUrl) {
+        Product product = productRepo.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
+
+        product.setImages(
+                product.getImages().stream()
+                        .filter(img -> !img.getImageUrl().equals(imageUrl))
                         .collect(Collectors.toList())
         );
 

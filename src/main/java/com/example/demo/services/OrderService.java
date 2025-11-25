@@ -1,5 +1,7 @@
 package com.example.demo.services;
 
+import com.example.demo.dto.OrderDto;
+import com.example.demo.dto.OrderMapper;
 import com.example.demo.entities.*;
 import com.example.demo.exceptions.InsufficientInventoryException;
 import com.example.demo.exceptions.InvalidOrderStateException;
@@ -26,6 +28,9 @@ import java.util.stream.Collectors;
 public class OrderService {
     @Autowired
     private OrderRepo orderRepo;
+    @Autowired
+    private OrderMapper orderMapper;
+
 
     @Autowired
     private OrderItemRepo orderItemRepo;
@@ -34,68 +39,83 @@ public class OrderService {
     private CartRepo cartRepo;
 
     @Autowired
-    private CartItemRepo cartItemRepo;
+    private     CartItemRepo cartItemRepo;
 
     @Autowired
     private ProductRepo productRepo;
 
-    @Autowired
-    private PaymentRepo paymentRepo;
-
     /**
      * Get all orders with optional pagination
      */
-    public Page<Order> getAllPaginated(Pageable pageable) {
-        return orderRepo.findAll(pageable);
+    public List<OrderDto> getAllPaginated() {
+        return orderRepo.findAll()
+                .stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     /**
      * Get all orders (without pagination)
      */
-    public List<Order> getAll() {
-        return orderRepo.findAll();
+    public List<OrderDto> getAll() {
+        return orderRepo.findAll().
+                stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     /**
      * Get order by ID
      */
-    public Optional<Order> getById(Long id) {
-        return orderRepo.findById(id);
+    public Optional<OrderDto> getById(Long id) {
+        return orderRepo.findById(id)
+                .map(order -> orderMapper.toDto(order));
     }
+
 
     /**
      * Get orders by user email with pagination
      */
-    public Page<Order> getByUserEmail(String email, Pageable pageable) {
-        return orderRepo.findByUser_Email(email, pageable);
+    public List<OrderDto> getByUserEmail(String email)
+    {
+        return orderRepo.findByUser_Email(email)
+                .stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     /**
      * Get orders by status with pagination
      */
-    public Page<Order> getByStatus(StatusOrder status, Pageable pageable) {
-        return orderRepo.findByStatusOrder(status, pageable);
-    }
+
 
     /**
      * Get orders by date range with pagination
      */
-    public Page<Order> getByDateRange(LocalDate startDate, LocalDate endDate, Pageable pageable) {
-        return orderRepo.findByOrderDateBetween(startDate, endDate, pageable);
+    public List<OrderDto> getByDateRange(LocalDate startDate, LocalDate endDate) {
+        return orderRepo.findByOrderDateBetween(startDate, endDate)
+                .stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     /**
      * Filter orders with advanced criteria and pagination
      */
-    public Page<Order> filterOrders(Long userId, StatusOrder status,
+    public List<OrderDto> filterOrders(Long userId,
                                     LocalDate startDate, LocalDate endDate,
-                                    Double minAmount, Pageable pageable) {
-        return orderRepo.findOrdersByFilters(userId, status, startDate, endDate, minAmount, pageable);
+                                    Double minAmount) {
+        return orderRepo.findOrdersByFilters(userId,startDate, endDate, minAmount)
+                .stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     /**
      * Create a new order
      */
+    @Transactional
+
     public Order add(Order order) {
         // Validate order data
         if (order.getUser() == null) {
@@ -108,10 +128,6 @@ public class OrderService {
         }
         order.setUpdatedAt(LocalDateTime.now());
 
-        // Set initial status if not provided
-        if (order.getStatusOrder() == null) {
-            order.updateStatus(StatusOrder.PENDING, "Order created");
-        }
 
         return orderRepo.save(order);
     }
@@ -119,6 +135,8 @@ public class OrderService {
     /**
      * Update an existing order
      */
+    @Transactional
+
     public Order update(Long id, Order updatedOrder) {
         Order existingOrder = orderRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
@@ -136,9 +154,7 @@ public class OrderService {
         if (updatedOrder.getShippingCountry() != null) {
             existingOrder.setShippingCountry(updatedOrder.getShippingCountry());
         }
-        if (updatedOrder.getTrackingNumber() != null) {
-            existingOrder.setTrackingNumber(updatedOrder.getTrackingNumber());
-        }
+
 
         existingOrder.setUpdatedAt(LocalDateTime.now());
         return orderRepo.save(existingOrder);
@@ -152,67 +168,10 @@ public class OrderService {
         Order order = orderRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
 
-        // Only allow deletion of pending orders
-        if (order.getStatusOrder() != StatusOrder.PENDING) {
-            throw new InvalidOrderStateException("Can only delete orders in PENDING state");
-        }
 
         orderRepo.deleteById(id);
     }
 
-    /**
-     * Get orders by status
-     */
-    public List<Order> getByStatus(StatusOrder statusOrder) {
-        return orderRepo.findByStatusOrder(statusOrder);
-    }
-
-    /**
-     * Update order status with validation and history tracking
-     */
-    @Transactional
-    public Order updateStatus(Long id, StatusOrder newStatus, String comment) {
-        Order order = orderRepo.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
-
-        // Validate status transition
-        validateStatusTransition(order.getStatusOrder(), newStatus);
-
-        // Update the order status
-        order.updateStatus(newStatus, comment);
-
-        // If order is completed, update product inventory
-        if (newStatus == StatusOrder.DELIVERED) {
-            updateProductInventoryForDeliveredOrder(order);
-        }
-
-        // If order is cancelled, restore inventory
-        if (newStatus == StatusOrder.CANCELLED) {
-            restoreProductInventory(order);
-        }
-
-        return orderRepo.save(order);
-    }
-
-    /**
-     * Validate that a status transition is allowed
-     */
-    private void validateStatusTransition(StatusOrder currentStatus, StatusOrder newStatus) {
-        // Define allowed transitions
-        Map<StatusOrder, List<StatusOrder>> allowedTransitions = Map.of(
-                StatusOrder.PENDING, List.of(StatusOrder.PROCESSING, StatusOrder.CANCELLED),
-                StatusOrder.PROCESSING, List.of(StatusOrder.SHIPPED, StatusOrder.CANCELLED),
-                StatusOrder.SHIPPED, List.of(StatusOrder.DELIVERED, StatusOrder.RETURNED),
-                StatusOrder.DELIVERED, List.of(StatusOrder.RETURNED),
-                StatusOrder.CANCELLED, List.of(), // Terminal state
-                StatusOrder.RETURNED, List.of()   // Terminal state
-        );
-
-        if (!allowedTransitions.getOrDefault(currentStatus, List.of()).contains(newStatus)) {
-            throw new InvalidOrderStateException(
-                    "Invalid status transition from " + currentStatus + " to " + newStatus);
-        }
-    }
 
     /**
      * Update product inventory when order is marked as delivered
@@ -257,12 +216,12 @@ public class OrderService {
         validateInventory(cart);
 
         // Create new order
-        Order order = new Order(cart.getUser(), LocalDate.now(), StatusOrder.PENDING);
+        Order order = new Order(cart.getUser(), LocalDate.now());
         order.setShippingAddress(shippingAddress);
         order.setShippingCity(shippingCity);
         order.setShippingZipCode(shippingZipCode);
         order.setShippingCountry(shippingCountry);
-        order = orderRepo.save(order);
+        orderRepo.save(order);
 
         // Get cart items
         List<CartItem> cartItems = cartItemRepo.findByCartId(cartId);
@@ -287,17 +246,31 @@ public class OrderService {
 
             OrderItem orderItem = new OrderItem(order, product, cartItem.getQuantity(), cartItem.getUnitPrice());
             orderItemRepo.save(orderItem);
+            order.getOrderItems().add(orderItem); // חשוב!
+
         }
 
         // Update order total
         order.setTotalAmount(totalAmount);
-        order = orderRepo.save(order);
+        try {
+             orderRepo.save(order);
+        } catch (Exception e) {
+            e.printStackTrace(); // או לוג
+            System.out.println("שגיאה: " + e.getMessage());
+            Throwable cause = e.getCause();
+            while (cause != null) {
+                System.out.println("Caused by: " + cause.getMessage());
+                cause = cause.getCause();
+            }
+            throw e; // כדי לראות בדיוק מה קרה
+        }
 
         // Deactivate the cart
         cart.setActive(false);
         cartRepo.save(cart);
 
         return order;
+
     }
 
     /**
@@ -315,41 +288,7 @@ public class OrderService {
         }
     }
 
-    /**
-     * Process payment for an order
-     */
-    @Transactional
-    public Payment processPayment(Long orderId, PaymentMethod paymentMethod, String transactionId) {
-        Order order = orderRepo.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-        // Create payment
-        Payment payment = new Payment(order, paymentMethod, order.getTotalAmount());
-
-        // Complete payment with transaction ID
-        payment.completePayment(transactionId);
-
-        // Save payment
-        payment = paymentRepo.save(payment);
-
-        // Update order status
-        order.updateStatus(StatusOrder.PROCESSING, "Payment processed");
-        orderRepo.save(order);
-
-        return payment;
-    }
-
-    /**
-     * Get order statistics for admin dashboard
-     */
-    public Map<StatusOrder, Long> getOrderStatusCounts() {
-        List<Object[]> results = orderRepo.countOrdersByStatus();
-        return results.stream()
-                .collect(Collectors.toMap(
-                        result -> (StatusOrder) result[0],
-                        result -> (Long) result[1]
-                ));
-    }
 
     /**
      * Get revenue statistics by date range
@@ -361,7 +300,10 @@ public class OrderService {
     /**
      * Get recent orders
      */
-    public List<Order> getRecentOrders() {
-        return orderRepo.findTop10ByOrderByCreatedAtDesc();
+    public List<OrderDto> getRecentOrders() {
+        return orderRepo.findTop10ByOrderByCreatedAtDesc()
+                .stream()
+                .map(orderMapper::toDto)
+                .collect(Collectors.toList());
     }
 }

@@ -1,5 +1,7 @@
 package com.example.demo.entities;
 
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,6 +16,8 @@ import java.util.List;
 
 @Entity
 @Table(name = "orders")
+@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
+
 public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,9 +33,6 @@ public class Order {
 
     private LocalDateTime updatedAt;
 
-    @Enumerated(EnumType.STRING)
-    private StatusOrder statusOrder;
-
     private double totalAmount;
 
     // Shipping details
@@ -39,22 +40,16 @@ public class Order {
     private String shippingCity;
     private String shippingZipCode;
     private String shippingCountry;
-    private String trackingNumber;
 
-    // Payment details - reference to payment entity
-    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
-    private Payment payment;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+
     private List<OrderItem> orderItems = new ArrayList<>();
 
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderStatusHistory> statusHistory = new ArrayList<>();
 
-    public Order(User user, LocalDate orderDate, StatusOrder statusOrder) {
+    public Order(User user, LocalDate orderDate) {
         this.user = user;
         this.orderDate = orderDate;
-        this.statusOrder = statusOrder;
         this.totalAmount = 0;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
@@ -63,23 +58,9 @@ public class Order {
         if (user != null && user.getAddress() != null) {
             this.shippingAddress = user.getAddress();
         }
-
-        // Add initial status to history
-        this.addStatusHistory(statusOrder, "Order created");
     }
 
-    // Method to update order status
-    public void updateStatus(StatusOrder newStatus, String comment) {
-        this.statusOrder = newStatus;
-        this.addStatusHistory(newStatus, comment);
-        this.updatedAt = LocalDateTime.now();
-    }
 
-    // Method to add status history
-    private void addStatusHistory(StatusOrder status, String comment) {
-        OrderStatusHistory history = new OrderStatusHistory(this, status, comment);
-        this.statusHistory.add(history);
-    }
 
     // Method to calculate total amount
     public void calculateTotalAmount() {
@@ -94,7 +75,7 @@ public class Order {
             throw new IllegalArgumentException("Cart or user cannot be null");
         }
 
-        Order order = new Order(cart.getUser(), LocalDate.now(), StatusOrder.PENDING);
+        Order order = new Order(cart.getUser(), LocalDate.now());
         order.setShippingAddress(shippingAddress);
 
         // Convert cart items to order items

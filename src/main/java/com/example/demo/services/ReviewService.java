@@ -44,8 +44,8 @@ public class ReviewService {
     /**
      * Get paginated reviews (admin function)
      */
-    public Page<Review> getAllPaginated(Pageable pageable) {
-        return reviewRepo.findAll(pageable);
+    public List<Review> getAllPaginated() {
+        return reviewRepo.findAll();
     }
 
     /**
@@ -62,12 +62,6 @@ public class ReviewService {
         return reviewRepo.findByProductId(productId);
     }
 
-    /**
-     * Get paginated reviews by product ID
-     */
-    public Page<Review> getByProductId(Long productId, Pageable pageable) {
-        return reviewRepo.findByProductId(productId, pageable);
-    }
 
     /**
      * Get reviews by user ID
@@ -80,8 +74,7 @@ public class ReviewService {
      * Get approved reviews by product ID
      */
     public List<Review> getApprovedByProductId(Long productId) {
-        Pageable pageable = PageRequest.of(0, 10);
-        return reviewRepo.findByProductIdAndApprovedTrue(productId, pageable).getContent();
+        return reviewRepo.findByProductIdAndApprovedTrue(productId);
     }
 
 
@@ -258,8 +251,7 @@ public class ReviewService {
      * Calculate average rating for a product
      */
     public double calculateAverageRating(Long productId) {
-        Pageable pageable = PageRequest.of(0, 10);
-        List<Review> reviews = reviewRepo.findByProductIdAndApprovedTrue(productId,pageable).getContent();
+        List<Review> reviews = reviewRepo.findByProductIdAndApprovedTrue(productId);
         if (reviews.isEmpty()) {
             return 0.0;
         }
@@ -305,6 +297,6 @@ public class ReviewService {
      * Get recent reviews
      */
     public List<Review> getRecentReviews(int limit) {
-        return reviewRepo.findTopByOrderByCreatedAtDesc(PageRequest.of(0, limit));
+        return reviewRepo.findTopByOrderByCreatedAtDesc();
     }
 }

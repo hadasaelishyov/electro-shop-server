@@ -1,5 +1,6 @@
 package com.example.demo.controllers;
 
+import com.example.demo.dto.ProductDto;
 import com.example.demo.entities.Product;
 import com.example.demo.entities.ProductSpecification;
 import com.example.demo.services.ProductService;
@@ -28,23 +29,15 @@ public class ProductController {
 
     // Get all products
     @GetMapping
-    public ResponseEntity<List<Product>> getAll() {
-        return ResponseEntity.ok(productService.getAll());
+    public ResponseEntity<List<ProductDto>> getAll() {
+        List<ProductDto>products = productService.getAll();
+        return ResponseEntity.ok(products);
     }
 
-    // Get all products with pagination
-    @GetMapping("/paginated")
-    public ResponseEntity<Page<Product>> getAllPaginated(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "id") String sortBy) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
-        return ResponseEntity.ok(productService.getAllActive(pageable));
-    }
 
     // Get product by ID
     @GetMapping("/{id}")
-    public ResponseEntity<Product> getById(@PathVariable Long id) {
+    public ResponseEntity<ProductDto> getById(@PathVariable Long id) {
         return productService.getById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -52,26 +45,21 @@ public class ProductController {
 
     // Search products with filters
     @GetMapping("/search")
-    public ResponseEntity<Page<Product>> search(
+    public ResponseEntity<List<ProductDto> >search(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) Double minPrice,
-            @RequestParam(required = false) Double maxPrice,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(productService.searchProducts(name, categoryId, brand, minPrice, maxPrice, pageable));
+            @RequestParam(required = false) Double maxPrice) {
+
+        return ResponseEntity.ok(productService.searchProducts(name, categoryId, brand, minPrice, maxPrice));
     }
 
     // Get products by category
     @GetMapping("/category/{categoryId}")
-    public ResponseEntity<Page<Product>> getByCategory(
-            @PathVariable Long categoryId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(productService.getByCategoryId(categoryId, pageable));
+    public ResponseEntity<List<ProductDto>> getByCategory(
+            @PathVariable Long categoryId){
+        return ResponseEntity.ok(productService.getByCategoryId(categoryId));
     }
 
     // Get products by brand
@@ -125,51 +113,35 @@ public class ProductController {
 
     // Create new product
     @PostMapping
-    public ResponseEntity<Product> create(@RequestBody Product product) {
+    public ResponseEntity<?> create(@RequestBody ProductDto productDTO) {
         try {
-            return ResponseEntity.status(HttpStatus.CREATED).body(productService.add(product));
+            Product product = productService.createFromDTO(productDTO);
+            return ResponseEntity.status(HttpStatus.CREATED).body(product);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to create product: " + e.getMessage()));
         }
     }
 
     // Update product
     @PutMapping("/{id}")
-    public ResponseEntity<Product> update(@PathVariable Long id, @RequestBody Product product) {
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody ProductDto productDTO) {
         try {
-            return ResponseEntity.ok(productService.update(id, product));
+            ProductDto product = productService.updateFromDTO(id, productDTO);
+            return ResponseEntity.ok(product);
         } catch (EntityNotFoundException e) {
             return ResponseEntity.notFound().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to update product: " + e.getMessage()));
         }
     }
 
-    // Add image to product
-    @PostMapping("/{id}/images")
-    public ResponseEntity<Product> addImage(
-            @PathVariable Long id,
-            @RequestParam("image") MultipartFile imageFile,
-            @RequestParam(defaultValue = "false") boolean isMain) {
-        try {
-            return ResponseEntity.ok(productService.addProductImage(id, imageFile, isMain));
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
 
-    // Add specification to product
-    @PostMapping("/{id}/specifications")
-    public ResponseEntity<Product> addSpecification(
-            @PathVariable Long id,
-            @RequestParam String specName,
-            @RequestParam String specValue) {
-        try {
-            return ResponseEntity.ok(productService.addProductSpecification(id, specName, specValue));
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        }
-    }
 
     // Delete specification
     @DeleteMapping("/{productId}/specifications/{specId}")
@@ -178,6 +150,16 @@ public class ProductController {
             @PathVariable Long specId) {
         try {
             return ResponseEntity.ok(productService.deleteSpecification(productId, specId));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    @DeleteMapping("/{productId}/specifications/{imageUrl}")
+    public ResponseEntity<Product> deleteImage(
+            @PathVariable Long productId,
+            @PathVariable String imageUrl) {
+        try {
+            return ResponseEntity.ok(productService.deleteImage(productId, imageUrl));
         } catch (EntityNotFoundException e) {
             return ResponseEntity.notFound().build();
         }

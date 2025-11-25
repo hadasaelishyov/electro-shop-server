@@ -17,8 +17,6 @@ public interface ReviewRepo extends JpaRepository<Review, Long> {
     // כל הביקורות על מוצר מסוים
     List<Review> findByProductId(Long productId);
 
-    // תמיכה בדפדוף לביקורות של מוצר
-    Page<Review> findByProductId(Long productId, Pageable pageable);
 
     // לסדר את הביקורות של מוצר מהחדשות לישנות
     List<Review> findByProductIdOrderByCreatedAtDesc(Long productId);
@@ -26,14 +24,12 @@ public interface ReviewRepo extends JpaRepository<Review, Long> {
     // ביקורות של משתמש ספציפי
     List<Review> findByUserId(Long userId);
 
-    // ביקורות של משתמש ספציפי עם דפדוף
-    Page<Review> findByUserId(Long userId, Pageable pageable);
 
     // ביקורות שעדיין לא אושרו (למנהל)
     List<Review> findByApprovedFalse();
 
     // ביקורות שאושרו (לתצוגה)
-    Page<Review> findByProductIdAndApprovedTrue(Long productId, Pageable pageable);
+    List<Review> findByProductIdAndApprovedTrue(Long productId);
 
     // ביקורות מאומתות (verified purchase)
     List<Review> findByProductIdAndVerifiedPurchaseTrue(Long productId);
@@ -58,7 +54,7 @@ public interface ReviewRepo extends JpaRepository<Review, Long> {
             "LIMIT :limit")
     List<Object[]> findTopRatedProducts(@Param("limit") int limit);
 
-    List<Review> findTopByOrderByCreatedAtDesc(Pageable pageable);
+    List<Review> findTopByOrderByCreatedAtDesc();
 
     boolean existsByUserIdAndProductId(Long userId, Long productId);
 

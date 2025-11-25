@@ -70,7 +70,7 @@ public class CartController {
     }
 
     @PostMapping("/{cartId}/products/{productId}")
-    public ResponseEntity<CartItem> addProductToCart(
+    public ResponseEntity<Cart> addProductToCart(
             @PathVariable Long cartId,
             @PathVariable Long productId,
             @RequestParam int quantity) {
@@ -86,7 +86,7 @@ public class CartController {
     }
 
     @PutMapping("/{cartId}/products/{productId}")
-    public ResponseEntity<CartItem> updateCartItemQuantity(
+    public ResponseEntity<Cart> updateCartItemQuantity(
             @PathVariable Long cartId,
             @PathVariable Long productId,
             @RequestParam int quantity) {

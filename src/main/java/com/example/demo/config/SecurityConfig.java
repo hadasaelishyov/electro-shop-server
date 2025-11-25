@@ -10,23 +10,16 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
-
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        // גרסה 6.1.0 ומעלה
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable());
-
-        // אם יש צורך להגדיר הרשאות גישה:
-        http.authorizeHttpRequests(auth ->
-                auth.requestMatchers("/products/**", "/categories/**").permitAll()
-                        .anyRequest().authenticated()
-        );
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
 
         return http.build();
     }
